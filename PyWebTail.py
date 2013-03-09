@@ -11,6 +11,7 @@ PyWebTail.py
 
 import sys
 import os
+import glob
 from time import time, strftime, localtime
 from SocketServer import ThreadingMixIn
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
@@ -59,12 +60,31 @@ def tail(f, lines=10, _block_size=512):
         data = tmp_data + data
         block_counter -= 1
     return data.splitlines()[-lines:]
+
+def getLatestFileInList(entrylist):
+    filelist = filter(lambda x: os.path.isfile(x), entrylist)
+    if len(filelist)==0: return None
+    return max(filelist, key=lambda x: os.path.getctime(x))
+
+def getLatestFileInDir(directory):
+    filelist = os.listdir(directory)
+    return getLatestFileInList(filelist)
+
+def getLatestFile(construct):
+    if os.path.isfile(construct):
+        return construct
+    # get latest file in dir
+    if os.path.isdir(construct):
+        return getLatestFileInDir(construct)
+    # assume the construct is a regexp
+    return getLatestFileInList(glob.glob(construct))
         
 class TailHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header("Content-type", "text/html")
-        self.end_headers()  
+        self.end_headers()
+        filename=getLatestFile(self.server.tail_filename)
         html="""
 <html><!--- refresh with a random url to avoid caching --->
 <head><meta http-equiv="refresh" content="10;URL=/%s"></head>
@@ -72,9 +92,10 @@ class TailHandler(BaseHTTPRequestHandler):
 <b>%s</b><br>
 """ % (str(time()), strftime("%a, %d %b %Y %X %Z", localtime()))
         self.wfile.write(html)
-        with open(self.server.tail_filename) as tail_file:
-            tail_lines = tail(tail_file, self.server.tail_lines)            
-            self.wfile.write('<br>'.join(tail_lines))
+        if filename:
+            with open(filename) as tail_file:
+                tail_lines = tail(tail_file, self.server.tail_lines)            
+                self.wfile.write('<br>'.join(tail_lines))
         self.wfile.write('</body></html>')            
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
