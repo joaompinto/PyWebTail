@@ -33,7 +33,10 @@ def parse_args():
     parser = OptionParser()
     parser.add_option("-n", "--lines K", 
                       action="store", type="int", dest="lines", default=10,
-                      help="output the last K lines, instead of the last 10")    
+                      help="output the last K lines, instead of the last 10")
+    parser.add_option("-o", "--output-filename K", 
+                      action="store_true", dest="output_filename", default=False,
+                      help="also outputs the filename in the HTML response")    
     parser.add_option("-l", "--listener-port", 
                       action="store", type="int", dest="port",
                       help="Specifies the HTTP listener port")
@@ -85,12 +88,15 @@ class TailHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "text/html")
         self.end_headers()
         filename=getLatestFile(self.server.tail_filename)
+        out_filename=None
+        if self.server.output_filename:
+            out_filename=" - %s"%(filename)
         html="""
 <html><!--- refresh with a random url to avoid caching --->
 <head><meta http-equiv="refresh" content="10;URL=/%s"></head>
 <body>
-<b>%s</b><br>
-""" % (str(time()), strftime("%a, %d %b %Y %X %Z", localtime()))
+<b>%s%s</b><br>
+""" % (str(time()), strftime("%a, %d %b %Y %X %Z", localtime()),out_filename or "")
         self.wfile.write(html)
         if filename:
             with open(filename) as tail_file:
@@ -112,6 +118,7 @@ def main():
             ("0.0.0.0", options.port), TailHandler )
     server.tail_filename = tail_filename
     server.tail_lines = options.lines
+    server.output_filename = options.output_filename
     server.serve_forever()
 
 if __name__ == '__main__':
